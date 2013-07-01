@@ -2,7 +2,8 @@
 #include<stdlib.h>
 
 typedef struct __node__ {
-    int pivot;
+    double pivot;
+    struct __node__* parent;
     struct __node__* l;
     struct __node__* r;
 } node;
@@ -39,14 +40,59 @@ void sort(double* xs, int len){
     qsort(xs,len,sizeof(double),cmp);
 }
 
-int main(void){
-    double xs[10] = {5.0,3.0,1.0,2.0,8.0,4.0,7.0,6.0,9.0,10.0};
 
-    sort(xs,10);
+//Builds a BST from the xs of length len assuming len is equal to a power of two
+node* build_tree(double* xs, int len){
+    node** nodes = malloc(len*sizeof(node*));
+    int* indices = malloc(len*sizeof(int));
+    node* new_node;
 
-    for(int i = 0; i<10; i++){
-        printf("%lf\n", xs[i]);
+    sort(xs, len);
+
+    for (int i=0; i<len; i++){
+        nodes[i] = malloc(sizeof(node));
+        nodes[i]->l = NULL;
+        nodes[i]->r = NULL;
+        nodes[i]->pivot = xs[i];
+        indices[i] = i;
     }
+
+    while (len>0){
+        //printf("%d\n", len);
+        len = len>>1;
+        for (int i=0; i<len; i++){
+            new_node = malloc(sizeof(node));
+            nodes[2*i]->parent   = new_node;
+            nodes[2*i+1]->parent = new_node;
+
+            new_node->l = nodes[2*i];
+            new_node->r = nodes[2*i+1];
+            new_node->pivot = xs[(indices[2*i]+indices[2*i+1])/2];
+            //printf("len=%d, i=%d, indices[]...=%d\n", len, i, (indices[2*i]+indices[2*i+1])/2);
+            indices[i] = (indices[2*i]+indices[2*i+1])/2;
+            nodes[i] = new_node;
+        }
+    }
+
+    free(indices);
+
+    return nodes[0];
+}
+
+void print_dft(node* n, int depth){
+    if (n == NULL) return;
+    for (int i = 0; i<depth; i++) printf(">");
+    printf("%lf\n", n->pivot);
+    print_dft(n->l, depth+1);
+    print_dft(n->r, depth+1);
+}
+
+
+int main(void){
+    double xs[16] = {4.0,14.0,2.0,11.0,0.0,1.0,7.0,10.0,15.0,3.0,6.0,5.0,12.0,8.0,9.0,13.0};
+    node* root = build_tree(xs, 16);
+
+    print_dft(root, 0);
 
     return 0;
 }
