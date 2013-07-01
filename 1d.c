@@ -1,8 +1,11 @@
 #include<stdio.h>
 #include<stdlib.h>
 
+
+//A node in our SBT
 typedef struct __node__ {
     double pivot;
+    int leaves;
     struct __node__* parent;
     struct __node__* l;
     struct __node__* r;
@@ -54,6 +57,7 @@ node* build_tree(double* xs, int len){
         nodes[i]->l = NULL;
         nodes[i]->r = NULL;
         nodes[i]->pivot = xs[i];
+        nodes[i]->leaves = 1;
         indices[i] = i;
     }
 
@@ -67,6 +71,7 @@ node* build_tree(double* xs, int len){
 
             new_node->l = nodes[2*i];
             new_node->r = nodes[2*i+1];
+            new_node->leaves = new_node->l->leaves + new_node->r->leaves;
             new_node->pivot = xs[(indices[2*i]+indices[2*i+1])/2];
             //printf("len=%d, i=%d, indices[]...=%d\n", len, i, (indices[2*i]+indices[2*i+1])/2);
             indices[i] = (indices[2*i]+indices[2*i+1])/2;
@@ -82,7 +87,7 @@ node* build_tree(double* xs, int len){
 void print_dft(node* n, int depth){
     if (n == NULL) return;
     for (int i = 0; i<depth; i++) printf(">");
-    printf("%lf\n", n->pivot);
+    printf("%lf, leaves = %d\n", n->pivot,n->leaves);
     print_dft(n->l, depth+1);
     print_dft(n->r, depth+1);
 }
