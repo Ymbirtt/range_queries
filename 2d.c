@@ -201,7 +201,7 @@ node* build_xtree(point* ps, int l){
 void print_ytree(node* n, int depth){
     if (n == NULL) return;
     for (int i = 0; i<depth; i++) printf(">");
-    printf("(%lf,%lf), leaves = %d\n", n->pivot.x, n->pivot.y, n->leaves);
+    printf("%lf, leaves = %d\n", n->pivot.y, n->leaves);
     print_ytree(n->l, depth+1);
     print_ytree(n->r, depth+1);
 }
@@ -209,7 +209,7 @@ void print_ytree(node* n, int depth){
 void print_xtree(node* n, int depth){
     if (n == NULL) return;
     for (int i = 0; i<depth; i++) printf(">");
-    printf("(%lf,%lf), leaves = %d\n", n->pivot.x, n->pivot.y, n->leaves);
+    printf("%lf, leaves = %d\n", n->pivot.x, n->leaves);
     for (int i = 0; i<depth; i++) printf(">");
     printf("ytree:\n");
     for (int i = 0; i<depth; i++) printf(">");
