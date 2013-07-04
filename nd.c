@@ -3,7 +3,6 @@
 #include<string.h>
 #include<math.h>
 
-//A point in n-d space
 typedef struct{
     double* x;
     int n;
@@ -11,18 +10,19 @@ typedef struct{
 
 //A node in our SBT
 typedef struct __node__ {
-    double pivot;
-    int level;
-    int leaves;
-    struct __node__* parent;
-    struct __node__* l;
-    struct __node__* r;
-    struct __node__* d;
+    double pivot;             //The disciminator value at this node; all values to the left are strictly smaller in the relevant dimension
+    int level;                //The level of the tree - the dimension over which points are discriminated
+    int leaves;               //The total number of leaves this node has as descendants
+    double weight;            //The total weight of all leaves this node has as descendants
+    struct __node__* parent;  //The parent of this node - currently defined but unused
+    struct __node__* l;       //The left child
+    struct __node__* r;       //The right child
+    struct __node__* d;       //The tree on the level below this one, discriminating over a different dimension
 } node;
 
-//This needs to be massive so that the program segfaults if you don't initialise it
+//This needs to be a dumb value so that the program segfaults if you don't initialise it
 //Also, for the love of god, learn C++ at some point...
-int CMP_DIM = 1<<8;
+int CMP_DIM = -1;
 
 //Prints a point in n-d space but does not print a newline
 void print_point(point p){
@@ -58,6 +58,22 @@ void sort(double* xs, int len){
 void sort_dim(point* xs, int dim, int len){
     CMP_DIM = dim;
     qsort(xs,len,sizeof(point),cmp_dim);
+}
+
+//TODO: I need to look up function pointers again - eventually these will be passed into the constructor as arguments
+
+//A weighting function
+double w(point p){
+    double s;
+    for (int i=0; i<p.n; i++){
+        s+=p.x[i];
+    }
+    return s;
+}
+
+//A semigroup operator
+double add(double x1, double x2){
+    return x1+x2;
 }
 
 //Builds a BST from the sub array ps_[start,end), discriminating by dimension dim
@@ -97,6 +113,7 @@ node* build_dtree(point* ps_, int start, int end, int dim){
         nodes[i]->level = dim;
         nodes[i]->pivot = ps[i].x[dim];
         nodes[i]->leaves = 1;
+        nodes[i]->weight = w(ps[i]);
         starts[i] = i;
         ends[i] = i+1;
         nodes[i]->d = build_dtree(ps, i, i+1, dim+1);
@@ -111,6 +128,7 @@ node* build_dtree(point* ps_, int start, int end, int dim){
         nodes[i]->level = dim;
         nodes[i]->pivot = HUGE_VAL;
         nodes[i]->leaves = 0;
+        nodes[i]->weight = 0.0;
         starts[i] = l;
         ends[i] = l;
         nodes[i]->d = NULL;
@@ -132,6 +150,7 @@ node* build_dtree(point* ps_, int start, int end, int dim){
             new_node->d = build_dtree(ps, starts[2*i], ends[2*i+1],dim+1);
             new_node->level = dim;
             new_node->leaves = new_node->l->leaves + new_node->r->leaves;
+            new_node->weight = add(new_node->l->weight, new_node->r->weight);
             new_node->pivot = ps[(indices[2*i]+indices[2*i+1])/2].x[dim];
             starts[i] = starts[2*i];
             ends[i] = ends[2*i+1];
@@ -146,6 +165,29 @@ node* build_dtree(point* ps_, int start, int end, int dim){
     return nodes[0];
 }
 
+void print_dtree(node* n, int depth, int max_level){
+    if (n == NULL) return;
+    if (n->level >= max_level) return;
+
+    printf("%d: ", n->level);
+    for (int i = 0; i<depth; i++) printf(">");
+    printf("%lf, leaves = %d, weight = %.0lf\n", n->pivot, n->leaves, n->weight);
+    if (n->d != NULL){
+        printf("%d: ", n->level);
+        for (int i = 0; i<depth; i++) printf(">");
+        printf("subtree:\n");
+        printf("%d: ", n->level);
+        for (int i = 0; i<depth; i++) printf(">");
+        printf("========\n");
+        print_dtree(n->d, depth, max_level);
+        printf("%d: ", n->level);
+        for (int i = 0; i<depth; i++) printf(">");
+        printf("========\n");
+    }
+    print_dtree(n->l, depth+1, max_level);
+    print_dtree(n->r, depth+1, max_level);
+}
+
 void print_ytree(node* n, int depth){
     if (n == NULL) return;
     for (int i = 0; i<depth; i++) printf(">");
@@ -158,7 +200,7 @@ void print_xtree(node* n, int depth){
     if (n == NULL) return;
     //printf("%d:", n.level);
     for (int i = 0; i<depth; i++) printf(">");
-    printf("%lf, leaves = %d\n", n->pivot, n->leaves);
+    printf("%lf, leaves = %d, weight = %.0lf\n", n->pivot, n->leaves, n->weight);
     for (int i = 0; i<depth; i++) printf(">");
     printf("ytree:\n");
     for (int i = 0; i<depth; i++) printf(">");
@@ -184,7 +226,7 @@ int main(void){
 
     node* root = build_dtree(ps, 0, 15, 0);
 
-    print_xtree(root, 0);
+    print_dtree(root, 0, 2);
 
     return 0;
 }
