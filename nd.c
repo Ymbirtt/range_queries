@@ -34,24 +34,6 @@ void print_point(point p){
     printf("%.1lf)", p.x[i]);
 }
 
-/*
-int cmp_x(const void* x1, const void* x2){
-    point p1 = *((point*)x1);
-    point p2 = *((point*)x2);
-    if (p1.x<p2.x) return -1;
-    if (p1.x>p2.x) return  1;
-    return 0;
-}
-
-int cmp_y(const void* x1, const void* x2){
-    point p1 = *((point*)x1);
-    point p2 = *((point*)x2);
-    if (p1.y<p2.y) return -1;
-    if (p1.y>p2.y) return  1;
-    return 0;
-}
-*/
-
 int cmp_dim(const void* x1, const void* x2){
     point p1 = *((point*)x1);
     point p2 = *((point*)x2);
@@ -72,31 +54,25 @@ void sort(double* xs, int len){
     qsort(xs,len,sizeof(double),cmp);
 }
 
-void sort_x(point* xs, int len){
-    printf("SORT_X SHOULD NOT BE CALLED\n");
-    //qsort(xs,len,sizeof(point),cmp_x);
-}
-
-void sort_y(point* xs, int len){
-    printf("SORT_Y SHOULD NOT BE CALLED\n");
-    //qsort(xs,len,sizeof(point),cmp_y);
-}
-
 //Sorts the xs of length len along dimension dim
 void sort_dim(point* xs, int dim, int len){
     CMP_DIM = dim;
     qsort(xs,len,sizeof(point),cmp_dim);
 }
 
-//Builds a y-dimension BST from the sub array ps_[start,end)
-node* build_ytree(point* ps_, int start, int end){
-    printf("Building ytree from %d to %d\n", start, end);
+//Builds a BST from the sub array ps_[start,end), discriminating by dimension dim
+//Assumes that the ps_ are non-empty, and that they all exist in the same dimension
+//PLEASE do not try and call this with points existing in multiple different spaces
+node* build_dtree(point* ps_, int start, int end, int dim){
+    if (dim >= ps_[0].n) return NULL;
+    printf("Building dimension %d tree from %d to %d\n", dim, start, end);
+
     int i;
     int len;
-    int level = 1;
     int l = end-start;
     point* ps = malloc((l)*sizeof(point));
 
+    //Given the amount of in-place sorting happening here, making a local copy is probably advisable
     memcpy(ps, &ps_[start], (l)*sizeof(point));
 
     //len is just l rounded up to the next power of 2
@@ -106,101 +82,40 @@ node* build_ytree(point* ps_, int start, int end){
         len = l;
     }
 
-    printf("len=%d, l=%d\n",len,l);
-
     node** nodes = malloc(len*sizeof(node*));
     int* indices = malloc(len*sizeof(int));
     node* new_node;
-
-    sort_dim(ps, 1, l);
-
-    for (i=0; i<l; i++){
-        nodes[i] = malloc(sizeof(node));
-        nodes[i]->l = NULL;
-        nodes[i]->r = NULL;
-        nodes[i]->pivot = ps[i].x[level];
-        nodes[i]->leaves = 1;
-        indices[i] = i;
-    }
-
-    for (;i<len;i++){
-        nodes[i] = malloc(sizeof(node));
-        nodes[i]->l = NULL;
-        nodes[i]->r = NULL;
-        nodes[i]->pivot = HUGE_VAL;
-        nodes[i]->leaves = 0;
-        indices[i] = i;
-    }
-
-    while (len>0){
-        //printf("%d\n", len);
-        len = len>>1;
-        for (i=0; i<len; i++){
-            new_node = malloc(sizeof(node));
-            nodes[2*i]->parent   = new_node;
-            nodes[2*i+1]->parent = new_node;
-
-            new_node->l = nodes[2*i];
-            new_node->r = nodes[2*i+1];
-            new_node->d = NULL;
-            new_node->leaves = new_node->l->leaves + new_node->r->leaves;
-            new_node->pivot = ps[(indices[2*i]+indices[2*i+1])/2].x[level];
-            //printf("len=%d, i=%d, indices[]...=%d\n", len, i, (indices[2*i]+indices[2*i+1])/2);
-            indices[i] = (indices[2*i]+indices[2*i+1])/2;
-            nodes[i] = new_node;
-        }
-    }
-
-    free(indices);
-
-    return nodes[0];
-}
-
-//Builds an x-dimension BST from the ps of length len
-node* build_xtree(point* ps, int l){
-    int i;
-    int len;
-    int level = 0;
-
-    //len is just l rounded up to the next power of 2
-    if ((l & (l-1)) != 0) {
-        len = 1<<((8*sizeof(int))-__builtin_clz(l));
-    } else {
-        len = l;
-    }
-
-    node** nodes = malloc(len*sizeof(node*));
-    int* indices = malloc(len*sizeof(int));
     int* starts = malloc(len*sizeof(int));
     int* ends = malloc(len*sizeof(int));
-    node* new_node;
 
-
-    sort_dim(ps, level, l);
+    sort_dim(ps, dim, l);
 
     for (i=0; i<l; i++){
         nodes[i] = malloc(sizeof(node));
         nodes[i]->l = NULL;
         nodes[i]->r = NULL;
-        nodes[i]->pivot = ps[i].x[level];
+        nodes[i]->level = dim;
+        nodes[i]->pivot = ps[i].x[dim];
         nodes[i]->leaves = 1;
-        indices[i] = i;
         starts[i] = i;
         ends[i] = i+1;
-        nodes[i]->d = build_ytree(ps, i, i+1);
-        printf("(%d,%d)\n", starts[i], ends[i]);
+        nodes[i]->d = build_dtree(ps, i, i+1, dim+1);
+        indices[i] = i;
+        //printf("(%d,%d)\n", starts[i], ends[i]);
     }
 
     for (;i<len;i++){
         nodes[i] = malloc(sizeof(node));
         nodes[i]->l = NULL;
         nodes[i]->r = NULL;
+        nodes[i]->level = dim;
         nodes[i]->pivot = HUGE_VAL;
         nodes[i]->leaves = 0;
-        indices[i] = i;
         starts[i] = l;
         ends[i] = l;
-        printf("(%d,%d)\n", starts[i], ends[i]);
+        nodes[i]->d = NULL;
+        indices[i] = i;
+        //printf("(%d,%d)\n", starts[i], ends[i]);
     }
 
     while (len>0){
@@ -213,13 +128,14 @@ node* build_xtree(point* ps, int l){
 
             new_node->l = nodes[2*i];
             new_node->r = nodes[2*i+1];
-            new_node->d = build_ytree(ps, starts[2*i], ends[2*i+1]);
-            new_node->leaves = new_node->l->leaves + new_node->r->leaves;
-            new_node->pivot = ps[(indices[2*i]+indices[2*i+1])/2].x[level];
-            //printf("len=%d, i=%d, indices[]...=%d\n", len, i, (indices[2*i]+indices[2*i+1])/2);
             printf("start=%d, end=%d\n", starts[2*i], ends[2*i+1]);
+            new_node->d = build_dtree(ps, starts[2*i], ends[2*i+1],dim+1);
+            new_node->level = dim;
+            new_node->leaves = new_node->l->leaves + new_node->r->leaves;
+            new_node->pivot = ps[(indices[2*i]+indices[2*i+1])/2].x[dim];
             starts[i] = starts[2*i];
             ends[i] = ends[2*i+1];
+            //printf("len=%d, i=%d, indices[]...=%d\n", len, i, (indices[2*i]+indices[2*i+1])/2);
             indices[i] = (indices[2*i]+indices[2*i+1])/2;
             nodes[i] = new_node;
         }
@@ -266,7 +182,7 @@ int main(void){
         ps[i].n = 2;
     }
 
-    node* root = build_xtree(ps, 15);
+    node* root = build_dtree(ps, 0, 15, 0);
 
     print_xtree(root, 0);
 
