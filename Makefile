@@ -11,8 +11,12 @@ all:
 2d: 2d.c
 	gcc $(FLAGS) -o ./2d.exe ./2d.c
 
-nd: nd.c
-	gcc $(FLAGS) -o ./nd.exe ./nd.c
+mt: mt.c
+	gcc $(FLAGS) -o ./mt.o ./mt.c
+
+nd: nd.c mt.o
+	gcc $(FLAGS) -o ./nd.exe ./mt.o ./nd.c
 
 clean:
-	rm -rf ./*.exe
+	rm -f ./*.exe
+	rm -f ./*.o

@@ -2,6 +2,7 @@
 #include<stdlib.h>
 #include<string.h>
 #include<math.h>
+#include"mt.h"
 
 typedef struct{
     double total_weight;
@@ -63,6 +64,13 @@ void sort(double* xs, int len){
 void sort_dim(point* xs, int dim, int len){
     CMP_DIM = dim;
     qsort(xs,len,sizeof(point),cmp_dim);
+}
+
+//Returns a continuous, uniormly distributed random-ish number between a and b
+//seeding function should be called beforehand
+//mmmm, delicious mersenne twister
+double uniform(double a, double b){
+    return genrand_real1()*(b-a) + a;
 }
 
 //TODO: I need to look up function pointers again - eventually these will be passed into the constructor as arguments
@@ -408,6 +416,8 @@ int main(void){
     point* ps = malloc(15*sizeof(point));
     double avg;
     int i;
+
+    init_genrand(0);
 
     for (i=0; i<15; i++){
         ps[i].x = malloc(2*sizeof(double));
