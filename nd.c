@@ -2,6 +2,7 @@
 #include<stdlib.h>
 #include<string.h>
 #include<math.h>
+#include<assert.h>
 
 #include"mt.h"
 
@@ -101,7 +102,7 @@ node* build_dtree(point* ps_, int start, int end, int dim){
     point* ps = malloc((l)*sizeof(point));
 
     if (dim >= ps_[0].n) return NULL;
-    printf("Building dimension %d tree from %d to %d\n", dim, start, end);
+    //printf("Building dimension %d tree from %d to %d\n", dim, start, end);
 
 
     //Given the amount of in-place sorting happening here, making a local copy is probably advisable
@@ -162,7 +163,7 @@ node* build_dtree(point* ps_, int start, int end, int dim){
 
             new_node->l = nodes[2*i];
             new_node->r = nodes[2*i+1];
-            printf("start=%d, end=%d\n", starts[2*i], ends[2*i+1]);
+            //printf("start=%d, end=%d\n", starts[2*i], ends[2*i+1]);
             new_node->d = build_dtree(ps, starts[2*i], ends[2*i+1],dim+1);
             new_node->level = dim;
             new_node->leaves = new_node->l->leaves + new_node->r->leaves;
@@ -189,7 +190,7 @@ void print_dtree(node* n, int depth, int max_level){
 
     printf("%d: ", n->level);
     for (i = 0; i<depth; i++) printf(">");
-    printf("%lf, leaves = %d, weight = %.1lf\n", n->pivot, n->leaves, n->weight);
+    printf("%.1lf, leaves = %d, weight = %.1lf\n", n->pivot, n->leaves, n->weight);
     if (n->d != NULL){
         printf("%d: ", n->level);
         for (i = 0; i<depth; i++) printf(">");
@@ -215,6 +216,9 @@ response query_layer(node* root, point lowers, point uppers, int layer){
     r.total_weight = 0;
     r.total_leaves = 0;
 
+    assert(layer == u->level);
+    assert(layer == v->level);
+
     //for (i = 0; i<layer; i++) printf(">");
     //printf("Querying layer %d\n", layer);
 
@@ -223,9 +227,10 @@ response query_layer(node* root, point lowers, point uppers, int layer){
         //If we are at a leaf node at this stage, interestingness happens
         if (u->l == NULL){
             //If this leaf's pivot is in the valid range, and we're at the lowest layer, then we can start adding things
-            if (u->pivot > lowers.x[layer] && u->pivot < uppers.x[layer] && layer == lowers.n-1){
+            if (u->pivot > lowers.x[layer] && u->pivot < uppers.x[layer] && layer == (lowers.n-1)){
                 for (i = 0; i<layer; i++) printf(">");
-                printf("Hit leaf while finding z, adding value %.1lf\n", u->weight);
+                printf("Hit leaf while finding z, discriminator = %.1lf, bounds = (%.1lf,%.1lf), adding value %.1lf\n",
+                        u->pivot, lowers.x[layer], uppers.x[layer], u->weight);
                 r.total_leaves = u->leaves;
                 r.total_weight = u->weight;
                 return r;
@@ -233,9 +238,12 @@ response query_layer(node* root, point lowers, point uppers, int layer){
             } else if (u->pivot > lowers.x[layer] && u->pivot < uppers.x[layer]){
                 //It's probably faster to do this iteratively, but it's much easier to do it recursively
                 for (i = 0; i<layer; i++) printf(">");
-                printf("Hit leaf while finding z\n");
-                return query_layer(root, lowers, uppers, layer+1);
+                printf("Hit leaf while finding z, recursing\n");
+                return query_layer(u->d, lowers, uppers, layer+1);
+            //If this leaf's pivot is not in the valid range, we can quit out and return 0
             } else {
+                for (i = 0; i<layer; i++) printf(">");
+                printf("Hit leaf while finding z, but point was not in range\n");
                 return r;
             }
         }
@@ -307,7 +315,7 @@ response query_layer(node* root, point lowers, point uppers, int layer){
                 for (i = 0; i<layer; i++) printf(">");
                 printf("v left\n");
             } else {
-                if (u->r != NULL){
+                if (v->r != NULL){
                     r.total_weight += v->l->weight;
                     r.total_leaves += v->l->leaves;
                     for (i = 0; i<layer; i++) printf(">");
@@ -346,7 +354,7 @@ response query_layer(node* root, point lowers, point uppers, int layer){
         }
         //If this leaf node is valid in the relevant dimension, recurse and continue its consideration
         if(u->pivot > lowers.x[layer]){
-            r_ = query_layer(u, lowers, uppers, layer+1);
+            r_ = query_layer(u->d, lowers, uppers, layer+1);
             r.total_weight += r_.total_weight;
             r.total_leaves += r_.total_leaves;
         }
@@ -367,7 +375,7 @@ response query_layer(node* root, point lowers, point uppers, int layer){
             }
         }
         if(v->pivot < uppers.x[layer]){
-            r_ = query_layer(v, lowers, uppers, layer+1);
+            r_ = query_layer(v->d, lowers, uppers, layer+1);
             r.total_weight += r_.total_weight;
             r.total_leaves += r_.total_leaves;
         }
@@ -406,16 +414,18 @@ double stupid_query(point* ps, int len, point lower, point upper){
         if (valid){
             total_points++;
             total_weight += w(ps[i]);
+            //print_point(ps[i]);
+            //printf(" is valid \n");
         }
         valid = 1;
     }
-
+    printf("Total points found: %d, Total weights: %lf\n", total_points, total_weight);
     return total_weight/(double) total_points;
 }
 
 int main(void){
     int dims = 3;
-    int points = 128;
+    int points = 1024;
 
     point* ps = malloc(points*sizeof(point));
 
@@ -426,8 +436,8 @@ int main(void){
     double r1, r2;
     int i,j;
 
-    init_genrand(1);
-    printf("Generating points");
+    init_genrand(523453242);
+    printf("Generating points\n");
 
     for (i=0; i<points; i++){
         ps[i].x = malloc(dims*sizeof(double));
@@ -452,10 +462,18 @@ int main(void){
     }
     lowers.n = dims;
     uppers.n = dims;
-    printf("Building tree");
+    printf("Building tree\n");
     node* root = build_dtree(ps, 0, points, 0);
 
-    print_dtree(root, 0, dims);
+
+    //sort_dim(ps, 0, points);
+    //printf("Points are:\n");
+    //for (i=0; i<points; i++){
+    //    print_point(ps[i]);
+    //    printf("\n");
+    //}
+
+    //print_dtree(root, 0, dims);
 
     printf("Computing average for points between ");
     print_point(lowers);
