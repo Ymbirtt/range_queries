@@ -2,6 +2,7 @@
 #include<stdlib.h>
 #include<string.h>
 #include<math.h>
+
 #include"mt.h"
 
 typedef struct{
@@ -214,8 +215,8 @@ response query_layer(node* root, point lowers, point uppers, int layer){
     r.total_weight = 0;
     r.total_leaves = 0;
 
-    for (i = 0; i<layer; i++) printf(">");
-    printf("Querying layer %d\n", layer);
+    //for (i = 0; i<layer; i++) printf(">");
+    //printf("Querying layer %d\n", layer);
 
     //Navigate down the tree until upper and lower search paths diverge
     while (u == v){
@@ -233,6 +234,7 @@ response query_layer(node* root, point lowers, point uppers, int layer){
                 //It's probably faster to do this iteratively, but it's much easier to do it recursively
                 for (i = 0; i<layer; i++) printf(">");
                 printf("Hit leaf while finding z\n");
+                return query_layer(root, lowers, uppers, layer+1);
             } else {
                 return r;
             }
@@ -259,12 +261,12 @@ response query_layer(node* root, point lowers, point uppers, int layer){
         }
     }
 
-    for (i = 0; i<layer; i++) printf(">");
-    printf("Found z\n");
-    for (i = 0; i<layer; i++) printf(">");
-    printf("Discriminators are %.1lf and %.1lf\n", u->pivot, v->pivot);
-    for (i = 0; i<layer; i++) printf(">");
-    printf("Underlying weights are %.1lf and %.1lf\n", u->weight, v->weight);
+    //for (i = 0; i<layer; i++) printf(">");
+    //printf("Found z\n");
+    //for (i = 0; i<layer; i++) printf(">");
+    //printf("Discriminators are %.1lf and %.1lf\n", u->pivot, v->pivot);
+    //for (i = 0; i<layer; i++) printf(">");
+    //printf("Underlying weights are %.1lf and %.1lf\n", u->weight, v->weight);
 
     if (layer == lowers.n-1){
         //If this is the bottom layer, add in the weights you find
@@ -412,34 +414,59 @@ double stupid_query(point* ps, int len, point lower, point upper){
 }
 
 int main(void){
-    double xs[15] = {4.0,14.0,2.0,11.0,0.0,1.0,7.0,10.0,15.0,3.0,6.0,5.0,12.0,8.0,9.0}; //Protip: x=13 is missing
-    point* ps = malloc(15*sizeof(point));
-    double avg;
-    int i;
+    int dims = 3;
+    int points = 128;
 
-    init_genrand(0);
+    point* ps = malloc(points*sizeof(point));
 
-    for (i=0; i<15; i++){
-        ps[i].x = malloc(2*sizeof(double));
-        ps[i].x[0] = xs[i];
-        ps[i].x[1] = (double) i;
-        ps[i].n = 2;
+    point lowers;
+    point uppers;
+
+    double avg1, avg2;
+    double r1, r2;
+    int i,j;
+
+    init_genrand(1);
+    printf("Generating points");
+
+    for (i=0; i<points; i++){
+        ps[i].x = malloc(dims*sizeof(double));
+        ps[i].n = dims;
+        for (j=0; j<dims; j++){
+            ps[i].x[j] = uniform(0,10);
+        }
     }
 
-    node* root = build_dtree(ps, 0, 15, 0);
+    lowers.x = malloc(dims*sizeof(double));
+    uppers.x = malloc(dims*sizeof(double));
+    for (j=0; j<dims; j++){
+        r1 = uniform(0,10);
+        r2 = uniform(0,10);
+        if (r1<r2){
+            lowers.x[j] = r1;
+            uppers.x[j] = r2;
+        } else {
+            lowers.x[j] = r2;
+            uppers.x[j] = r1;
+        }
+    }
+    lowers.n = dims;
+    uppers.n = dims;
+    printf("Building tree");
+    node* root = build_dtree(ps, 0, points, 0);
 
-    print_dtree(root, 0, 2);
+    print_dtree(root, 0, dims);
 
     printf("Computing average for points between ");
-    print_point(ps[0]);
+    print_point(lowers);
     printf(" and ");
-    print_point(ps[14]);
+    print_point(uppers);
     printf(".\n");
 
-    avg = query(root, ps[0], ps[14]);
-    printf("Clever average = %lf\n", avg);
-    avg = stupid_query(ps, 15, ps[0], ps[14]);
-    printf("Stupid average = %lf\n", avg);
+    avg1 = query(root, lowers, uppers);
+    printf("Clever average = %lf\n", avg1);
+    avg2 = stupid_query(ps, points, lowers, uppers);
+    printf("Stupid average = %lf\n", avg2);
 
     return 0;
 }
