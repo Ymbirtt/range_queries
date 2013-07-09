@@ -3,7 +3,7 @@ FLAGS = -Wall -std=c99
 all:
 	make 1d
 	make 2d
-	make nd
+	make level-n-trees
 
 1d: 1d.c
 	gcc $(FLAGS) -o ./1d.exe ./1d.c
@@ -14,8 +14,8 @@ all:
 mt: mt.c
 	gcc $(FLAGS) -o ./mt.o ./mt.c
 
-nd: nd.c mt.o
-	gcc $(FLAGS) -o ./nd.exe ./mt.o ./nd.c
+level-n-trees: level-n-trees.c mt.o
+	gcc $(FLAGS) -o ./level-n-trees.exe ./mt.o ./level-n-trees.c
 
 clean:
 	rm -f ./*.exe

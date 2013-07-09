@@ -392,7 +392,7 @@ response query_layer(node* root, point lowers, point uppers, int layer){
 //the feature list
 double query(node* root, point lower, point upper){
     response r = query_layer(root, lower, upper, 0);
-    //printf("Response found - total leaves = %d, total weight = %.1lf\n", r.total_leaves, r.total_weight);
+    printf("Response found - total leaves = %d, total weight = %.1lf\n", r.total_leaves, r.total_weight);
     return r.total_weight/(double) r.total_leaves;
 }
 
@@ -420,14 +420,14 @@ double stupid_query(point* ps, int len, point lower, point upper){
         }
         valid = 1;
     }
-    //printf("Total points found: %d, Total weights: %lf\n", total_points, total_weight);
+    printf("Total points found: %d, Total weights: %lf\n", total_points, total_weight);
     return total_weight/(double) total_points;
 }
 
 int main(void){
     int dims = 3;
-    int points = 1<<15;
-    int queries = 10000;
+    int points = 1<<13;
+    int queries = 100;
 
     point* ps = malloc(points*sizeof(point));
 
