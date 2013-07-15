@@ -1,4 +1,4 @@
-FLAGS = -Wall -g -std=c99
+FLAGS = -Wall -g -O3 --std=c99
 
 all:
 	make 1d

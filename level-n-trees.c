@@ -4,12 +4,13 @@
 #include<math.h>
 #include<assert.h>
 #include<time.h>
+#include<stdint.h>
 
 #include"mt.h"
 
 typedef struct{
     double total_weight;
-    int total_leaves;
+    int32_t total_leaves;
 } response;
 
 typedef struct{
@@ -21,7 +22,7 @@ typedef struct{
 typedef struct __node__ {
     double pivot;             //The disciminator value at this node; all values to the left are strictly smaller in the relevant dimension
     int level;                //The level of the tree - the dimension over which points are discriminated
-    int leaves;               //The total number of leaves this node has as descendants
+    int32_t leaves;           //The total number of leaves this node has as descendants
     double weight;            //The total weight of all leaves this node has as descendants
     struct __node__* parent;  //The parent of this node - currently defined but unused
     struct __node__* l;       //The left child
@@ -96,13 +97,13 @@ double add(double x1, double x2){
 //Builds a BST from the sub array ps_[start,end), discriminating by dimension dim
 //Assumes that the ps_ are non-empty, and that they all exist in the same dimension
 //PLEASE do not try and call this with points existing in multiple different spaces
-node* build_dtree(point* ps_, int start, int end, int dim){
-    int i;
-    int len;
-    int l = end-start;
+node* build_dtree(point* ps_, int32_t start, int32_t end, int dim){
+    if (dim >= ps_[0].n) return NULL;
+    int32_t i;
+    int32_t len;
+    int32_t l = end-start;
     point* ps = malloc((l)*sizeof(point));
 
-    if (dim >= ps_[0].n) return NULL;
     //printf("Building dimension %d tree from %d to %d\n", dim, start, end);
 
 
@@ -111,16 +112,16 @@ node* build_dtree(point* ps_, int start, int end, int dim){
 
     //len is just l rounded up to the next power of 2
     if ((l & (l-1)) != 0) {
-        len = 1<<((8*sizeof(int))-__builtin_clz(l));
+        len = 1<<((8*sizeof(int32_t))-__builtin_clz(l));
     } else {
         len = l;
     }
 
     node** nodes = malloc(len*sizeof(node*));
-    int* indices = malloc(len*sizeof(int));
+    int32_t* indices = malloc(len*sizeof(int32_t));
     node* new_node;
-    int* starts = malloc(len*sizeof(int));
-    int* ends = malloc(len*sizeof(int));
+    int32_t* starts = malloc(len*sizeof(int32_t));
+    int32_t* ends = malloc(len*sizeof(int32_t));
 
     sort_dim(ps, dim, l);
 
@@ -179,6 +180,9 @@ node* build_dtree(point* ps_, int start, int end, int dim){
     }
 
     free(indices);
+    free(starts);
+    free(ends);
+    free(ps);
 
     return nodes[0];
 }
@@ -392,7 +396,7 @@ response query_layer(node* root, point lowers, point uppers, int layer){
 //the feature list
 double query(node* root, point lower, point upper){
     response r = query_layer(root, lower, upper, 0);
-    printf("Response found - total leaves = %d, total weight = %.1lf\n", r.total_leaves, r.total_weight);
+    //printf("Response found - total leaves = %d, total weight = %.1lf\n", r.total_leaves, r.total_weight);
     return r.total_weight/(double) r.total_leaves;
 }
 
@@ -420,14 +424,14 @@ double stupid_query(point* ps, int len, point lower, point upper){
         }
         valid = 1;
     }
-    printf("Total points found: %d, Total weights: %lf\n", total_points, total_weight);
+    //printf("Total points found: %d, Total weights: %lf\n", total_points, total_weight);
     return total_weight/(double) total_points;
 }
 
 int main(void){
-    int dims = 3;
-    int points = 1<<13;
-    int queries = 100;
+    int dims = 2;
+    int32_t points = 1<<25;
+    int32_t queries = 1<<25;
 
     point* ps = malloc(points*sizeof(point));
 
@@ -438,17 +442,24 @@ int main(void){
     clock_t toc1 = 0;
     clock_t tic2 = 0;
     clock_t toc2 = 0;
+    
+    clock_t tic3 = clock();
+    clock_t toc3;
+    
+    clock_t seed;
 
     double avg1, avg2;
     double r1, r2;
-    int i,j;
+    int32_t i,j;
 
     node* root;
 
     init_genrand(clock());
-    printf("Generating points\n");
-
+    //printf("Generating %ld points\n", points);
+    //printf("This computer carries 8589934592 bytes of memory. Each tree node requires %d bytes\n", sizeof(node));
+    
     for (i=0; i<points; i++){
+        //if(i%(queries/100) == 0) printf("%d\n",i);
         ps[i].x = malloc(dims*sizeof(double));
         ps[i].n = dims;
         for (j=0; j<dims; j++){
@@ -456,10 +467,10 @@ int main(void){
         }
     }
     tic1 = clock();
-    root = build_dtree(ps, 0, points, 0);
+    //root = build_dtree(ps, 0, points, 0);
     toc1 += clock() - tic1;
 
-    printf("Building tree took %lfs\n", ((double) toc1)/CLOCKS_PER_SEC);
+    //printf("Building tree took %ldms\n", toc1);
 
     toc1 = 0;
 
@@ -484,10 +495,14 @@ int main(void){
     lowers.n = dims;
     uppers.n = dims;
 
-    printf("Performing %d searches\n", queries);
+    //printf("Performing %d tree searches\n", queries);
 
+    seed = clock();
+    init_genrand(seed);
+    
+    tic1 = clock();
     for (i=0; i<queries; i++){
-        if(i%(queries/100) == 0) printf("%d\n",i);
+        //if(i%(queries/100) == 0) printf("%d\n",i);
         for (j=0; j<dims; j++){
             r1 = uniform(0,10);
             r2 = uniform(0,10);
@@ -499,16 +514,41 @@ int main(void){
                 uppers.x[j] = r1;
             }
         }
-        tic1 = clock();
-        avg1 = query(root, lowers, uppers);
-        toc1 += clock() - tic1;
-
-        tic2 = clock();
-        avg2 = stupid_query(ps, points, lowers, uppers);
-        toc2 += clock()-tic2;
+        //avg1 = query(root, lowers, uppers);    
     }
-    printf("Tree searching took %lfs\n", ((double) toc1)/CLOCKS_PER_SEC);
-    printf("Naive searching took %lfs\n", ((double) toc2)/CLOCKS_PER_SEC);
+    toc1 += clock() - tic1;
 
+    //printf("Performing %d naive searches\n", queries);
+   
+    init_genrand(seed);
+   
+    tic2 = clock();    
+    for (i=0; i<queries; i++){
+        //if(i%(queries/100) == 0) printf("%d\n",i);
+        for (j=0; j<dims; j++){
+            r1 = uniform(0,10);
+            r2 = uniform(0,10);
+            if (r1<r2){
+                lowers.x[j] = r1;
+                uppers.x[j] = r2;
+            } else {
+                lowers.x[j] = r2;
+                uppers.x[j] = r1;
+            }
+        }
+        avg2 = stupid_query(ps, points, lowers, uppers);
+    }
+    toc2 += clock()-tic2;
+
+    //printf("Tree searching took %dms\n", toc1);
+    //printf("Naive searching took %dms\n", toc2);
+
+    toc3 = clock();
+    
+    //printf("%d\n", toc3-tic3);
+    //printf("%d\n", CLOCKS_PER_SEC);
+    
+    printf("%d\n",toc2-toc1);
+    
     return 0;
 }
