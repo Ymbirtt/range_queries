@@ -17,6 +17,14 @@ typedef struct __point__{
     int n;
 } point;
 
+
+//Defines a box as a point on a corner, and d orthogonal vectors
+//representing each of its edges
+typedef struct{
+    point corner;
+    point* side;
+} box;
+
 //A node in our BST
 typedef struct __node__ {
     double pivot;             //The disciminator value at this node; all values to the left are strictly smaller in the relevant dimension
@@ -89,7 +97,7 @@ double w(point p){
 node* build_dtree(point* ps, int start, int end, int dim){
     node* new_node = malloc(sizeof(node));
 
-    printf("Building dimension %d tree from %d to %d\n", dim, start, end);
+    //printf("Building dimension %d tree from %d to %d\n", dim, start, end);
 
     if (start == end-1){
         //Leaf node
@@ -239,6 +247,300 @@ double query(node* root, point lower, point upper){
     return r.total_weight/(double) r.total_leaves;
 }
 
+
+//Returns the dot product between two vectors
+//If this is positive, the angle between them is acute
+//If negative, the angle is obtuse
+double dot_prod(point v1, point v2){
+    int i;
+    double prod = 0.0;
+    for (i=0; i<v1.n; i++){
+        prod += v1.x[i] * v2.x[i];
+    }
+    return prod;
+}
+
+//Stores p1-p2 in dest
+void point_subtract(point dest, point p1, point p2){
+    int i;
+    for (i=0; i<p1.n; i++){
+        dest.x[i] = p1.x[i] - p2.x[i];
+    }
+}
+
+//Stores p1+p2 in dest
+void point_add(point dest, point p1, point p2){
+    int i;
+    for (i=0; i<p1.n; i++){
+        dest.x[i] = p1.x[i] + p2.x[i];
+    }
+}
+
+//Returns 0 iff the given point does not lie strictly within the given box
+int point_inside(box b, point p){
+    point t1, t2;
+    int i;
+
+    t1.x = malloc(p.n * sizeof(double));
+    t1.n = p.n;
+
+    t2.x = malloc(p.n * sizeof(double));
+    t2.n = p.n;
+
+
+    point_subtract(t1, p, b.corner);
+    for (i=0; i<p.n; i++){
+        if(dot_prod(t1, b.side[i]) <= 0.0){
+            free(t1.x);
+            free(t2.x);
+            return 0;
+        }
+    }
+
+    for (i=0; i<p.n; i++){
+        point_add(t2, b.corner, b.side[i]);
+        point_subtract(t1, p, t2);
+        if(dot_prod(t1, b.side[i]) > 0.0){
+            free(t1.x);
+            free(t2.x);
+            return 0;
+        }
+    }
+    free(t1.x);
+    free(t2.x);
+    return 1;
+}
+
+//Worst.
+//Method.
+//Ever.
+//Check if all 2^d points that define the given cell are inside b.
+//If all of them are, then return -1
+//If none of them are, return 1
+//Otherwise, return 0
+int cell_cmp(const box b, const point cell_lower, const point cell_upper){
+    int i,corner;
+    point tmp;
+    int all_outside = 0;
+    int all_inside = 0;
+
+    tmp.n = cell_lower.n;
+    tmp.x = malloc(tmp.n * sizeof(double));
+
+    //Encode each corner of the cell as a bit-string. We assume that we're not
+    //working in anything above 8-dimensional space
+    for(corner = 0; corner < 1<<cell_lower.n; corner++){
+        for(i=0; i<cell_lower.n; i++){
+            if((corner & (1<<i)) != 0){
+                //bit i of corner is set
+                tmp.x[i] = cell_upper.x[i];
+            }else{
+                //bit i of corner is unset
+                tmp.x[i] = cell_lower.x[i];
+            }
+        }
+        if (point_inside(b,tmp)){
+            all_outside = 0;
+        } else {
+            all_inside = 0;
+        }
+        if (all_inside == 0 && all_outside == 0){
+            free(tmp.x);
+            return 0;
+        }
+    }
+    if(all_inside){
+        free(tmp.x);
+        return 1;
+    } else {
+        free(tmp.x);
+        return -1;
+    }
+}
+
+response query_box_cell(node* root, box b, point cell_lower, point cell_upper){
+    response r;
+    response r_;
+    int valid = 1;
+    double old_val;
+
+    r.total_leaves = 0;
+    r.total_weight = 0.0;
+
+    if (root->leaves == 0){
+        //Empty node
+        return r;
+    } else if (root->leaves ==1){
+        //Leaf node
+
+        //Is this point valid?
+        //If so, return it and its weight
+        if (point_inside(b, root->p)){
+            r.total_leaves = 1;
+            r.total_weight = root->weight;
+        }
+        return r;
+    } else {
+        //Internal node
+
+        //compare the current cell to the box
+        valid = cell_cmp(b, cell_lower, cell_upper);
+
+        //If the cell is completely inside the box, return the total weight of
+        //all its children
+        if (valid < 0){
+            r.total_leaves = root->leaves;
+            r.total_weight = root->weight;
+            return r;
+        }
+
+        //If the cell is completely outside of the box, return 0
+        if (valid > 0){
+            return r;
+        }
+
+        //Otherwise, continue searching
+
+        //Search the left subtree, this search cell is upper bounded in the relevant dimension by the pivot
+        old_val = cell_upper.x[root->dim];
+        cell_upper.x[root->dim] = root->pivot;
+        r_ = query_box_cell(root->l, b, cell_lower, cell_upper);
+        cell_upper.x[root->dim] = old_val;
+
+        r.total_leaves += r_.total_leaves;
+        r.total_weight += r_.total_weight;
+
+        //Search the right subtree, this search cell is lower bounded in the relevant dimension by the pivot
+        old_val = cell_lower.x[root->dim];
+        cell_lower.x[root->dim] = root->pivot;
+        r_ = query_box_cell(root->r, b, cell_lower, cell_upper);
+        cell_lower.x[root->dim] = old_val;
+
+        r.total_leaves += r_.total_leaves;
+        r.total_weight += r_.total_weight;
+
+        return r;
+    }
+}
+
+
+
+//Generates a random d-dimensional vector
+point rand_vector(int d, double min, double max){
+    int i;
+    point p;
+
+    p.n = d;
+    p.x = malloc(d*sizeof(double));
+
+    for (i=0; i<d; i++){
+        p.x[i] = uniform(min,max);
+    }
+
+    return p;
+}
+
+
+//Stores the projection operator applied to (u,v) in dest
+void proj(point dest, point u, point v){
+    int i;
+    double t1, t2;
+
+    t1 = dot_prod(u,v);
+    t2 = dot_prod(u,u);
+
+    t1 = t1/t2;
+
+    for(i=0;i<u.n;i++){
+        dest.x[i] = u.x[i] * t1;
+    }
+}
+
+//Generates a random d-dimensional box, with vectors uniformly distributed in
+//(min, max)
+box rand_box(int d, double min, double max){
+    int i,j;
+    box b;
+    point* temp_points;
+    point temp_point;
+
+    b.corner = rand_vector(d, min, max);
+    b.side = malloc(d*sizeof(point));
+    temp_points = malloc(d*sizeof(point));
+    temp_point.n = d;
+    temp_point.x = malloc(d*sizeof(point));
+
+    for (i=0; i<d; i++){
+        b.side[i] = rand_vector(d, min, max);
+        temp_points[i].n = d;
+        temp_points[i].x = malloc(d*sizeof(double));
+        for (j=0; j<d; j++){
+            temp_points[i].x[j] = 0.0;
+        }
+    }
+
+    for(i=0; i<d; i++){
+        point_add(temp_points[i], b.side[i], temp_points[i]);
+        for(j=0; j<i-1; j++){
+            proj(temp_point, temp_points[j], b.side[i]);
+            point_subtract(temp_points[i], temp_points[i], temp_point);
+        }
+    }
+
+    for(i=0; i<d; i++){
+        free(b.side[i].x);
+    }
+    
+    free(b.side);
+    free(temp_point.x);
+    b.side = temp_points;
+
+    return b;
+}
+
+//Returns the average weight of all points inside the box defined by b.
+double query_box(node* root, box b){
+    response r;
+    int i;
+    point cell_lower, cell_upper;
+
+    cell_lower.n = b.corner.n;
+    cell_upper.n = b.corner.n;
+
+    cell_lower.x = malloc(b.corner.n*sizeof(double));
+    cell_upper.x = malloc(b.corner.n*sizeof(double));
+
+    for (i=0; i<b.corner.n; i++){
+        cell_lower.x[i] = -HUGE_VAL;
+        cell_upper.x[i] =  HUGE_VAL;
+    }
+
+    r = query_box_cell(root, b, cell_lower, cell_upper);
+    
+    free(cell_lower.x);
+    free(cell_upper.x);
+    
+    printf("Total points found: %d, Total weights: %lf\n", r.total_leaves, r.total_weight);
+
+    return r.total_weight/(double) r.total_leaves;
+
+}
+
+double stupid_query_box(point* ps, int len, box b){
+    int total_points = 0;
+    double total_weight = 0.0;
+    int i;
+
+    for (i=0; i<len; i++){
+        if (point_inside(b,ps[i])){
+            total_points++;
+            total_weight += w(ps[i]);
+        }
+    }
+    printf("Total points found: %d, Total weights: %lf\n", total_points, total_weight);
+    return total_weight/(double) total_points;
+}
+
 //Returns the same as above, but with a much simpler, much more obviously correct, but much slower method. Handy for
 //testing
 double stupid_query(point* ps, int len, point lower, point upper){
@@ -266,24 +568,25 @@ double stupid_query(point* ps, int len, point lower, point upper){
     printf("Total points found: %d, Total weights: %lf\n", total_points, total_weight);
     return total_weight/(double) total_points;
 }
-
 int main(void){
     int dims = 2;
-    int points = 1<<10;
-    int queries = 1000;
+    int points = 1<<16;
+    int queries = 100000;
 
     point* ps = malloc(points*sizeof(point));
 
     point lowers;
     point uppers;
 
+    box b;
+
     clock_t tic1 = 0;
     clock_t toc1 = 0;
     clock_t tic2 = 0;
     clock_t toc2 = 0;
 
-    double avg1, avg2;
-    double r1, r2;
+    //double avg1, avg2;
+    //double r1, r2;
     int i,j;
 
     node* root;
@@ -307,13 +610,13 @@ int main(void){
     toc1 = 0;
 
     //sort_dim(ps, 0, points);
-    printf("Points are:\n");
-    for (i=0; i<points; i++){
-        print_point(ps[i]);
-        printf("\n");
-    }
+    //printf("Points are:\n");
+    //for (i=0; i<points; i++){
+    //    print_point(ps[i]);
+    //    printf("\n");
+    //}
 
-    print_dtree(root, 0);
+    //print_dtree(root, 0);
 
     //printf("Computing average for points between ");
     //print_point(lowers);
@@ -330,24 +633,14 @@ int main(void){
     printf("Performing %d searches\n", queries);
 
     for (i=0; i<queries; i++){
-        if(i%(queries/100) == 0) printf("%d\n",i);
-        for (j=0; j<dims; j++){
-            r1 = uniform(0,10);
-            r2 = uniform(0,10);
-            if (r1<r2){
-                lowers.x[j] = r1;
-                uppers.x[j] = r2;
-            } else {
-                lowers.x[j] = r2;
-                uppers.x[j] = r1;
-            }
-        }
+        //if(i%(queries/100) == 0) printf("%d\n",i);
+        b = rand_box(dims, 0, 5);
         tic1 = clock();
-        avg1 = query(root, lowers, uppers);
+        query_box(root, b);
         toc1 += clock() - tic1;
 
         tic2 = clock();
-        avg2 = stupid_query(ps, points, lowers, uppers);
+        stupid_query_box(ps, points, b);
         toc2 += clock()-tic2;
     }
     printf("Tree searching took %lfs\n", ((double) toc1)/CLOCKS_PER_SEC);
