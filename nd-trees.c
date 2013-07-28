@@ -319,17 +319,19 @@ int point_inside(box b, point p){
 //If none of them are, return 1
 //Otherwise, return 0
 int cell_cmp(const box b, const point cell_lower, const point cell_upper){
-    int i,corner;
+    int i,corner,num_corners;
     point tmp;
-    int all_outside = 0;
-    int all_inside = 0;
+    int all_outside = 1;
+    int all_inside = 1;
 
     tmp.n = cell_lower.n;
     tmp.x = malloc(tmp.n * sizeof(double));
-
-    //Encode each corner of the cell as a bit-string. We assume that we're not
-    //working in anything above 8-dimensional space
-    for(corner = 0; corner < 1<<cell_lower.n; corner++){
+    
+    num_corners = (1<<cell_lower.n);
+    
+    //Encode each corner of the cell as a bit-string
+    for(corner = 0; corner < num_corners; corner++){
+        //printf("%d\n", corner);
         for(i=0; i<cell_lower.n; i++){
             if((corner & (1<<i)) != 0){
                 //bit i of corner is set
@@ -340,8 +342,10 @@ int cell_cmp(const box b, const point cell_lower, const point cell_upper){
             }
         }
         if (point_inside(b,tmp)){
+            //print_point(tmp);
             all_outside = 0;
         } else {
+            //print_point(tmp);
             all_inside = 0;
         }
         if (all_inside == 0 && all_outside == 0){
@@ -349,12 +353,13 @@ int cell_cmp(const box b, const point cell_lower, const point cell_upper){
             return 0;
         }
     }
+    
     if(all_inside){
-        free(tmp.x);
-        return 1;
+        free(tmp.x);    
+        return -1;
     } else {
         free(tmp.x);
-        return -1;
+        return 1;
     }
 }
 
@@ -372,7 +377,6 @@ response query_box_cell(node* root, box b, point cell_lower, point cell_upper){
         return r;
     } else if (root->leaves ==1){
         //Leaf node
-
         //Is this point valid?
         //If so, return it and its weight
         if (point_inside(b, root->p)){
@@ -520,7 +524,7 @@ double query_box(node* root, box b){
     free(cell_lower.x);
     free(cell_upper.x);
     
-    printf("Total points found: %d, Total weights: %lf\n", r.total_leaves, r.total_weight);
+    //printf("Total points found: %d, Total weights: %lf\n", r.total_leaves, r.total_weight);
 
     return r.total_weight/(double) r.total_leaves;
 
@@ -537,7 +541,7 @@ double stupid_query_box(point* ps, int len, box b){
             total_weight += w(ps[i]);
         }
     }
-    printf("Total points found: %d, Total weights: %lf\n", total_points, total_weight);
+    //printf("Total points found: %d, Total weights: %lf\n", total_points, total_weight);
     return total_weight/(double) total_points;
 }
 
@@ -568,11 +572,19 @@ double stupid_query(point* ps, int len, point lower, point upper){
     printf("Total points found: %d, Total weights: %lf\n", total_points, total_weight);
     return total_weight/(double) total_points;
 }
-int main(void){
+int main(int argc, char** argv){
+    
+    if (argc != 2){
+        printf("NOPE NOPE NOPE");
+        return 0;
+    }
+    
     int dims = 2;
-    int points = 1<<16;
-    int queries = 100000;
-
+    int points = 1<<atoi(argv[1]);
+    int queries = 1000;
+    
+    printf("%d,", points);
+    
     point* ps = malloc(points*sizeof(point));
 
     point lowers;
@@ -592,7 +604,7 @@ int main(void){
     node* root;
 
     init_genrand(0);
-    printf("Generating points\n");
+    //printf("Generating points\n");
 
     for (i=0; i<points; i++){
         ps[i].x = malloc(dims*sizeof(double));
@@ -605,7 +617,7 @@ int main(void){
     root = build_dtree(ps, 0, points, 0);
     toc1 += clock() - tic1;
 
-    printf("Building tree took %lfs\n", ((double) toc1)/CLOCKS_PER_SEC);
+    printf("%d,", toc1);
 
     toc1 = 0;
 
@@ -630,7 +642,7 @@ int main(void){
     lowers.n = dims;
     uppers.n = dims;
 
-    printf("Performing %d searches\n", queries);
+    //printf("Performing %d searches\n", queries);
 
     for (i=0; i<queries; i++){
         //if(i%(queries/100) == 0) printf("%d\n",i);
@@ -643,8 +655,8 @@ int main(void){
         stupid_query_box(ps, points, b);
         toc2 += clock()-tic2;
     }
-    printf("Tree searching took %lfs\n", ((double) toc1)/CLOCKS_PER_SEC);
-    printf("Naive searching took %lfs\n", ((double) toc2)/CLOCKS_PER_SEC);
+    printf("%d,", toc1);
+    printf("%d\n",toc2);
 
     return 0;
 }
